@@ -34,25 +34,26 @@ spark = SparkSession.builder \
     .getOrCreate()
 
 # читаем из топика Kafka сообщения с акциями от ресторанов 
-restaurant_read_stream_df = spark.readStream \
-    .format('kafka') \
-    .option('kafka.bootstrap.servers', 'rc1b-2erh7b35n4j4v869.mdb.yandexcloud.net:9091') \
-    .option('kafka.security.protocol', 'SASL_SSL') \
-    .option('kafka.sasl.jaas.config', 'org.apache.kafka.common.security.scram.ScramLoginModule required username="login" password="password";') \
-    .option('kafka.sasl.mechanism', 'SCRAM-SHA-512') \
-    .option('kafka.ssl.truststore.location', '/usr/lib/jvm/java-1.17.0-openjdk-amd64/lib/security/cacerts') \
-    .option('kafka.ssl.truststore.password', 'changeit') \
-    .option('subscribe', 'your_topic') \
-    .load()
+def restaurant_read_stream_df(spark):
+    return spark.readStream \
+        .format('kafka') \
+        .option('kafka.bootstrap.servers', 'rc1b-2erh7b35n4j4v869.mdb.yandexcloud.net:9091') \
+        .option('kafka.security.protocol', 'SASL_SSL') \
+        .option('kafka.sasl.jaas.config', 'org.apache.kafka.common.security.scram.ScramLoginModule required username="login" password="password";') \
+        .option('kafka.sasl.mechanism', 'SCRAM-SHA-512') \
+        .option('kafka.ssl.truststore.location', '/usr/lib/jvm/java-1.17.0-openjdk-amd64/lib/security/cacerts') \
+        .option('kafka.ssl.truststore.password', 'changeit') \
+        .option('subscribe', 'student.topic.cohort5.xxxrichiexxx') \
+        .load()
 
 # определяем схему входного сообщения для json
-incomming_message_schema = ...
+incomming_message_schema = ''
 
 # определяем текущее время в UTC в миллисекундах
 current_timestamp_utc = int(round(datetime.utcnow().timestamp()))
 
 # десериализуем из value сообщения json и фильтруем по времени старта и окончания акции
-filtered_read_stream_df = ....
+filtered_read_stream_df = ''
 
 # вычитываем всех пользователей с подпиской на рестораны
 subscribers_restaurant_df = spark.read \
@@ -65,7 +66,7 @@ subscribers_restaurant_df = spark.read \
                     .load()
 
 # джойним данные из сообщения Kafka с пользователями подписки по restaurant_id (uuid). Добавляем время создания события.
-result_df = ...
+result_df = restaurant_read_stream_df(spark)
 # запускаем стриминг
 result_df.writeStream \
     .foreachBatch(foreach_batch_function) \

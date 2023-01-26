@@ -1,0 +1,58 @@
+Привет! Тема для меня новая, поэтому буду писать кусочек за кусочком
+Сейчас код в процессе написания
+Пожалуйста, ответь на вопрос ниже
+
+
+Для тестирования я использую kcat-producer
+
+kafkacat -b rc1b-2erh7b35n4j4v869.mdb.yandexcloud.net:9091 \
+-X security.protocol=SASL_SSL \
+-X sasl.mechanisms=SCRAM-SHA-512 \
+-X sasl.username="de-student" \
+-X sasl.password="ltcneltyn" \
+-X ssl.ca.location=/usr/local/share/ca-certificates/Yandex/YandexCA.crt \
+-t student.topic.cohort5.xxxrichiexxx \
+-K: \
+-P
+
+key:{"restaurant_id": "123e4567-e89b-12d3-a456-426614174000","adv_campaign_id": "123e4567-e89b-12d3-a456-426614174003","adv_campaign_content": "first campaign","adv_campaign_owner": "Ivanov Ivan Ivanovich","adv_campaign_owner_contact": "iiivanov@restaurant_id","adv_campaign_datetime_start": 1659203516,"adv_campaign_datetime_end": 2659207116,"datetime_created": 1659131516}
+
+
+И проверяю с помощью kcat-консьюмера
+
+kafkacat -b rc1b-2erh7b35n4j4v869.mdb.yandexcloud.net:9091 \
+-X security.protocol=SASL_SSL \
+-X sasl.mechanisms=SCRAM-SHA-512 \
+-X sasl.username="de-student" \
+-X sasl.password="ltcneltyn" \
+-X ssl.ca.location=/usr/local/share/ca-certificates/Yandex/YandexCA.crt \
+-t student.topic.cohort5.xxxrichiexxx \
+-K \
+-C \
+-o beginning
+
+Консьюмер успешно возвращает:
+% Auto-selecting Consumer mode (use -P or -C to override)
+key-C{"restaurant_id": "123e4567-e89b-12d3-a456-426614174000","adv_campaign_id": "123e4567-e89b-12d3-a456-426614174003","adv_campaign_content": "first campaign","adv_campaign_owner": "Ivanov Ivan Ivanovich","adv_campaign_owner_contact": "iiivanov@restaurant_id","adv_campaign_datetime_start": 1659203516,"adv_campaign_datetime_end": 2659207116,"datetime_created": 1659131516}
+
+Но когда я пытаюсь выполнить (de-project-sprint-8/src/scripts/working_area.py)
+.option("subscribe", IN_TOPIC_NAME), где IN_TOPIC_NAME = 'student.topic.cohort5.xxxrichiexxx'
+То получаю пустое значение
+
+Batch: 0
+-------------------------------------------
++---+-----+-----+---------+------+---------+-------------+----+
+|key|value|topic|partition|offset|timestamp|timestampType|data|
++---+-----+-----+---------+------+---------+-------------+----+
++---+-----+-----+---------+------+---------+-------------+----+
+
+
+А если я попытаюсь использовать дефолтный код, который был описании проекта, то получаю ошибку
+ERROR DefaultSslEngineFactory: Modification time of key store could not be obtained: /usr/lib/jvm/java-1.17.0-openjdk-amd64/lib/security/cacerts
+На
+.option('kafka.ssl.truststore.location', '/usr/lib/jvm/java-1.17.0-openjdk-amd64/lib/security/cacerts') \
+.option('kafka.ssl.truststore.password', 'changeit')
+
+обе эти опции мне не знакомы
+
+ВОПРОС: Подскажи, пожалуйста, почему мой spark код не видит сообщения отправленные мной в продьюсер?
