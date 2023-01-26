@@ -45,7 +45,7 @@ def restaurant_read_stream_default(spark):
         .load()
 
 
-def restaurant_read_stream_mine(spark):
+def restaurant_read_stream(spark):
     """Код по аналогии с кодом на уроке"""
     schema = StructType([
                 StructField("restaurant_id", StringType(), nullable=True),
@@ -55,7 +55,6 @@ def restaurant_read_stream_mine(spark):
                 StructField("adv_campaign_owner_contact", StringType(), nullable=True),
                 StructField("adv_campaign_datetime_start", StringType(), nullable=True), # Заменить тип
                 StructField("adv_campaign_datetime_end", StringType(), nullable=True), # Заменить тип
-                StructField("adv_campaign_datetime_end", StringType(), nullable=True), # Заменить тип
                 StructField("datetime_created", StringType(), nullable=True) # Заменить тип
                         ])
     df = spark.readStream.format('kafka')\
@@ -64,12 +63,30 @@ def restaurant_read_stream_mine(spark):
                 .options(**kafka_security_options)\
                 .load()\
                 .withColumn('data', from_json(col('value').cast(StringType()), schema))\
-        
-    df.printSchema()
+                .select('data.restaurant_id', 'data.adv_campaign_id','data.adv_campaign_content','data.adv_campaign_owner',\
+                    'data.adv_campaign_owner_contact','data.adv_campaign_datetime_start','data.adv_campaign_datetime_end',\
+                        'data.datetime_created')
     return df
 
-result_df = restaurant_read_stream_mine(spark)
-query = (result_df
+
+def subscribers_restaurant_df(spark):
+    return spark.read \
+            .format('jdbc') \
+            .option('url', 'jdbc:postgresql://rc1a-fswjkpli01zafgjm.mdb.yandexcloud.net:6432/de') \
+            .option('driver', 'org.postgresql.Driver') \
+            .option('dbtable', 'subscribers_restaurants') \
+            .option('user', 'student') \
+            .option('password', 'de-student') \
+            .load()
+    
+
+database_data = subscribers_restaurant_df(spark)
+# databaase_data.show(truncate=False)
+stream_data = restaurant_read_stream(spark)
+result_data = stream_data.join(database_data, 'inner', stream_data.restaurant_id==database_data.restaurant_id)
+
+
+query = (stream_data
              .writeStream
              .outputMode("append")
              .format("console")
