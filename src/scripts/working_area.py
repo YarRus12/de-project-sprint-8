@@ -1,8 +1,10 @@
 import os
 from datetime import datetime
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, to_json, col, lit, struct
+from pyspark.sql.functions import from_json, to_json, col, lit, struct, current_timestamp, round, expr, to_utc_timestamp, unix_timestamp
 from pyspark.sql.types import StructType, StructField, StringType, LongType, TimestampType, DoubleType
+
+print("version 1.1.19")
 
 # необходимые библиотеки для интеграции Spark с Kafka и PostgreSQL
 spark_jars_packages = ",".join(
@@ -27,26 +29,9 @@ spark = SparkSession.builder \
     .getOrCreate()
 
 
-def restaurant_read_stream_default(spark):
-    """Дефолтный код из задания.
-        Исполнение завершается с ошибкой
-        ERROR DefaultSslEngineFactory: Modification time of key store could not be obtained: /usr/lib/jvm/java-1.17.0-openjdk-amd64/lib/security/cacerts
-        На докер нет такого файла =(
-    """
-    return spark.readStream \
-        .format('kafka') \
-        .option('kafka.bootstrap.servers', 'rc1b-2erh7b35n4j4v869.mdb.yandexcloud.net:9091') \
-        .option('kafka.security.protocol', 'SASL_SSL') \
-        .option('kafka.sasl.jaas.config', 'org.apache.kafka.common.security.scram.ScramLoginModule required username=\"de-student\" password=\"ltcneltyn\";') \
-        .option('kafka.sasl.mechanism', 'SCRAM-SHA-512') \
-        .option('kafka.ssl.truststore.location', '/usr/lib/jvm/java-1.17.0-openjdk-amd64/lib/security/cacerts') \
-        .option('kafka.ssl.truststore.password', 'changeit') \
-        .option('subscribe', IN_TOPIC_NAME) \
-        .load()
-
-
 def restaurant_read_stream(spark):
     """Код по аналогии с кодом на уроке"""
+    
     schema = StructType([
                 StructField("restaurant_id", StringType(), nullable=True),
                 StructField("adv_campaign_id", StringType(), nullable=True),
@@ -63,10 +48,13 @@ def restaurant_read_stream(spark):
                 .options(**kafka_security_options)\
                 .load()\
                 .withColumn('data', from_json(col('value').cast(StringType()), schema))\
+                .withColumn('current_timestamp_utc', unix_timestamp(current_timestamp(),'yyyy-MM-dd HH:mm:ss.SSS'))\
                 .select('data.restaurant_id', 'data.adv_campaign_id','data.adv_campaign_content','data.adv_campaign_owner',\
                     'data.adv_campaign_owner_contact','data.adv_campaign_datetime_start','data.adv_campaign_datetime_end',\
-                        'data.datetime_created')
+                        'data.datetime_created', 'current_timestamp_utc')\
+                .where("(adv_campaign_datetime_start < current_timestamp_utc) and (current_timestamp_utc < adv_campaign_datetime_end)")
     return df
+
 
 
 def subscribers_restaurant_df(spark):
@@ -81,20 +69,21 @@ def subscribers_restaurant_df(spark):
     
 
 database_data = subscribers_restaurant_df(spark)
-# databaase_data.show(truncate=False)
+database_data.show(truncate=False)
 stream_data = restaurant_read_stream(spark)
-result_data = stream_data.join(database_data, 'inner', stream_data.restaurant_id==database_data.restaurant_id)
+result_data = stream_data.join(database_data, 'restaurant_id', 'inner')
 
 
-query = (stream_data
+query = (result_data
              .writeStream
              .outputMode("append")
              .format("console")
              .option('spark.sql.streaming.forceDeleteTempCheckpointLocation', True)
              .option("truncate", False)
-             .trigger(once=True)
+             .trigger(processingTime='30 seconds')
              .start())
 try:
     query.awaitTermination()
 finally:
     query.stop()
+
