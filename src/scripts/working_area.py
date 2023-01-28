@@ -56,6 +56,7 @@ def restaurant_read_stream(spark):
                     'data.adv_campaign_owner_contact','data.adv_campaign_datetime_start','data.adv_campaign_datetime_end',\
                         'data.datetime_created', 'current_date', 'current_timestamp_utc')\
                 .where("(adv_campaign_datetime_start < current_timestamp_utc) and (current_timestamp_utc < adv_campaign_datetime_end)")
+    
     return df
 
 
