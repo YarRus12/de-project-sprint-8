@@ -5,7 +5,7 @@ from pyspark.sql.functions import from_json, to_json, col, lit, struct, current_
 from pyspark.sql.types import StructType, StructField, StringType, LongType, TimestampType, DoubleType
 import psycopg2
 
-print("version 1.2.12")
+print("version 2.1.0")
 
 # необходимые библиотеки для интеграции Spark с Kafka и PostgreSQL
 spark_jars_packages = ",".join(
@@ -16,7 +16,7 @@ spark_jars_packages = ",".join(
         )
 
 IN_TOPIC_NAME = 'student.topic.cohort5.xxxrichiexxx'
-OUT_TOPIC = 'student.topic.cohort5.xxxrichiexxx.out'
+OUT_TOPIC_NAME = 'student.topic.cohort5.xxxrichiexxx.out'
 
 kafka_security_options = {
     'kafka.security.protocol': 'SASL_SSL',
@@ -31,20 +31,19 @@ spark = SparkSession.builder \
     .getOrCreate()
 
 
-def restaurant_read_stream(spark):
-    """Код по аналогии с кодом на уроке"""
-    
+def restaurant_read_stream(spark: SparkSession):
+    """Функция принимает в себя спарк-сессию и возвращает топик из кафка"""
     schema = StructType([
                 StructField("restaurant_id", StringType(), nullable=True),
                 StructField("adv_campaign_id", StringType(), nullable=True),
                 StructField("adv_campaign_content", StringType(), nullable=True),
                 StructField("adv_campaign_owner", StringType(), nullable=True),
                 StructField("adv_campaign_owner_contact", StringType(), nullable=True),
-                StructField("adv_campaign_datetime_start", StringType(), nullable=True), # Заменить тип
-                StructField("adv_campaign_datetime_end", StringType(), nullable=True), # Заменить тип
-                StructField("datetime_created", StringType(), nullable=True) # Заменить тип
+                StructField("adv_campaign_datetime_start", LongType(), nullable=True),
+                StructField("adv_campaign_datetime_end", LongType(), nullable=True),
+                StructField("datetime_created", LongType(), nullable=True)
                         ])
-    df = spark.readStream.format('kafka')\
+    return spark.readStream.format('kafka')\
                 .option('kafka.bootstrap.servers', 'rc1b-2erh7b35n4j4v869.mdb.yandexcloud.net:9091') \
                 .option("subscribe", IN_TOPIC_NAME)\
                 .options(**kafka_security_options)\
@@ -56,12 +55,10 @@ def restaurant_read_stream(spark):
                     'data.adv_campaign_owner_contact','data.adv_campaign_datetime_start','data.adv_campaign_datetime_end',\
                         'data.datetime_created', 'current_date', 'current_timestamp_utc')\
                 .where("(adv_campaign_datetime_start < current_timestamp_utc) and (current_timestamp_utc < adv_campaign_datetime_end)")
-    
-    return df
 
 
-
-def subscribers_restaurant_df(spark):
+def subscribers_restaurant_df(spark: SparkSession):
+    """Функция принимает в себя спарк-сессию и возвращает данные из postgresql"""
     return spark.read \
             .format('jdbc') \
             .option('url', 'jdbc:postgresql://rc1a-fswjkpli01zafgjm.mdb.yandexcloud.net:6432/de') \
@@ -73,19 +70,8 @@ def subscribers_restaurant_df(spark):
 
 
 def foreach_batch_function(df, epoch_id):
+    """Функци обрабатывает каждый получаемый батч с данными и делает запись в postgresql и оправляет данные в kafka"""
     
-    host = 'localhost'
-    port = '5432'
-    dbname = 'de'
-    user='jovyan'
-    password='jovyan'
-    
-    print('Проверка существования результирующей таблицы в postgresql')
-    connect_to_postgresql = psycopg2.connect(f"host={host} port={port} dbname={dbname} user={user} password={password}")    
-    cursor = connect_to_postgresql.cursor()
-    cursor.execute(open('DDL.sql', 'r').read())
-    connect_to_postgresql.commit()
-    print('Таблица создана или была создана ранее')
     # добавляем колонку trigger_datetime_created
     df = df.withColumn('trigger_datetime_created', current_timestamp())
     # сохраняем df в памяти, чтобы не создавать df заново перед отправкой в Kafka
@@ -93,11 +79,11 @@ def foreach_batch_function(df, epoch_id):
     # записываем df в PostgreSQL с полем feedback
     df.select("restaurant_id","adv_campaign_id","adv_campaign_content","adv_campaign_owner","adv_campaign_owner_contact",\
         "adv_campaign_datetime_start","adv_campaign_datetime_end","datetime_created","client_id", 'trigger_datetime_created')\
-    .write.format("jdbc")\
-    .option("url", f"jdbc:postgresql://{host}:{port}/{dbname}") \
-    .mode("overwrite") \
-    .option("driver", "org.postgresql.Driver").option("dbtable", "public.subscribers_feedback") \
-    .option("user", f"{user}").option("password", f"{password}").save()
+        .write.format("jdbc")\
+        .option("url", f"jdbc:postgresql://{host}:{port}/{dbname}") \
+        .mode("overwrite") \
+        .option("driver", "org.postgresql.Driver").option("dbtable", "public.subscribers_feedback") \
+        .option("user", f"{user}").option("password", f"{password}").save()
     # создаём df для отправки в Kafka. Сериализация в json.
     kafka_out = df.withColumn(
                 'value',
@@ -108,17 +94,16 @@ def foreach_batch_function(df, epoch_id):
                     col("datetime_created"), col("client_id"), col('trigger_datetime_created')
                         ))).select('value')
     
-    # Здесь я пытаюсь отправить данные в Кафку и получаю pyspark.sql.utils.AnalysisException: 'writeStream' can be called only on streaming Dataset/DataFrame
-    kafka_out.writeStream\
-        .outputMode("append") \
-        .format('kafka') \
+    kafka_out.write \
+        .format("kafka") \
         .option('kafka.bootstrap.servers', 'rc1b-2erh7b35n4j4v869.mdb.yandexcloud.net:9091') \
         .options(**kafka_security_options)\
-        .option("topic", OUT_TOPIC) \
-        .option("checkpointLocation", "test_query") \
-        .trigger(processingTime="60 seconds") \
-        .start()
+        .option("topic", OUT_TOPIC_NAME)\
+        .mode("append")\
+        .save()
     
+    
+
     # очищаем память от df
     df.unpersist()
 
@@ -131,7 +116,19 @@ result_data = stream_data.join(database_data, 'restaurant_id', 'inner')\
     .dropDuplicates(['restaurant_id','client_id', 'current_timestamp']) \
     .withWatermark('current_timestamp', '5 minute')
 
+host = 'localhost'
+port = '5432'
+dbname = 'de'
+user='jovyan'
+password='jovyan'
+connect_to_postgresql = psycopg2.connect(f"host={host} port={port} dbname={dbname} user={user} password={password}")    
+cursor = connect_to_postgresql.cursor()
+cursor.execute(open('DDL.sql', 'r').read())
+connect_to_postgresql.commit()
+
+
 result_data.writeStream \
-    .foreachBatch(foreach_batch_function) \
+    .foreachBatch(foreach_batch_function)\
     .start() \
     .awaitTermination()
+

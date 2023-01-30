@@ -1,5 +1,5 @@
 Физическое подключение на удаленный сервер
-	ssh -i /Users/iaroslavrussu/Dropbox/Warlock/Data_engineering/yandex_practicum/lesson8/ssh_private_key.file yc-user@158.160.36.223
+	ssh -i /Users/iaroslavrussu/Dropbox/Warlock/Data_engineering/yandex_practicum/lesson8/ssh_private_key.file yc-user@62.84.117.42
 	
 Копирование файлов с моего ноутбука на удаленный сервер
 	/Users/iaroslavrussu/Dropbox/Warlock/Data_engineering/yandex_practicum/lesson8/s8-lessons/scp-files.sh
