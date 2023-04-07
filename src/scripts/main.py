@@ -1,6 +1,6 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, to_json, col, lit, struct, current_timestamp, round, expr, \
-    to_utc_timestamp, unix_timestamp, current_date, from_unixtime
+from pyspark.sql.functions import from_json, to_json, col, lit, struct, current_timestamp, round, expr
+from pyspark.sql.functions import to_utc_timestamp, unix_timestamp, current_date, from_unixtime
 from pyspark.sql.types import StructType, StructField, StringType, LongType, TimestampType, DoubleType
 import psycopg2
 
@@ -30,7 +30,12 @@ spark = SparkSession.builder \
 
 
 def restaurant_read_stream(spark_session: SparkSession):
-    """Функция принимает в себя спарк-сессию и возвращает топик из кафка"""
+    """
+    Функция извлекает данные из топика в Kafka
+
+    :param spark_session: параметры спарк-сесси
+    :return: данные из топика в Kafka
+    """
     schema = StructType([
         StructField("restaurant_id", StringType(), nullable=True),
         StructField("adv_campaign_id", StringType(), nullable=True),
@@ -57,7 +62,11 @@ def restaurant_read_stream(spark_session: SparkSession):
 
 
 def subscribers_restaurant_df(spark_session: SparkSession):
-    """Функция принимает в себя спарк-сессию и возвращает данные из postgresql"""
+    """Функция извлекает данные из Postgresql
+
+    :param spark_session: параметры спарк-сесси
+    :return: данные из PostgreSQL
+    """
     return spark_session.read \
         .format('jdbc') \
         .option('url', 'jdbc:postgresql://rc1a-fswjkpli01zafgjm.mdb.yandexcloud.net:6432/de') \
@@ -69,7 +78,11 @@ def subscribers_restaurant_df(spark_session: SparkSession):
 
 
 def foreach_batch_function(df):
-    """Функци обрабатывает каждый получаемый батч с данными и делает запись в postgresql и оправляет данные в kafka"""
+    """
+    Функция обрабатывает каждый получаемый батч с данными и делает запись в postgresql и отправляет данные в Kafka
+
+    :param df: объединный датафрейм из SparkStreaming и PostgreSQL
+    """
     # добавляем колонку trigger_datetime_created
     df = df.withColumn('trigger_datetime_created', current_timestamp())
     # сохраняем df в памяти, чтобы не создавать df заново перед отправкой в Kafka
